@@ -1,0 +1,638 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// AUTH & MULTI-TENANCY
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  memberships  FarmMembership[]
+  activityLogs ActivityLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Farm {
+  id        String   @id @default(cuid())
+  name      String
+  city      String?
+  state     String?
+  document  String?
+  totalArea Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships      FarmMembership[]
+  areas            Area[]
+  crops            Crop[]
+  activities       Activity[]
+  activityTypes    ActivityType[]
+  inputs           Input[]
+  inventoryEntries InventoryEntry[]
+  soilAnalyses     SoilAnalysis[]
+  bankAccounts     BankAccount[]
+  transactions     Transaction[]
+  categories       FinancialCategory[]
+  suppliers        Supplier[]
+  purchases        Purchase[]
+  harvests         Harvest[]
+  weatherRecords   WeatherRecord[]
+
+  @@map("farms")
+}
+
+enum FarmRole {
+  OWNER
+  MANAGER
+  ACCOUNTANT
+  WORKER
+  VIEWER
+}
+
+model FarmMembership {
+  id       String   @id @default(cuid())
+  userId   String
+  farmId   String
+  role     FarmRole @default(WORKER)
+  active   Boolean  @default(true)
+  joinedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, farmId])
+  @@map("farm_memberships")
+}
+
+// ============================================================
+// AREAS (TALHOES)
+// ============================================================
+
+model Area {
+  id          String   @id @default(cuid())
+  farmId      String
+  name        String
+  sizeHa      Float
+  geojson     Json?
+  color       String?  @default("#22c55e")
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  farm          Farm           @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cropAreas     CropArea[]
+  activityAreas ActivityArea[]
+  soilAnalyses  SoilAnalysis[]
+  harvests      Harvest[]
+
+  @@unique([farmId, name])
+  @@map("areas")
+}
+
+// ============================================================
+// CROPS / SEASONS (SAFRAS)
+// ============================================================
+
+enum PlantingType {
+  CANA_PLANTA
+  SOQUEIRA
+  OUTRO
+}
+
+enum CropStatus {
+  PLANEJADA
+  EM_ANDAMENTO
+  FINALIZADA
+}
+
+model Crop {
+  id           String       @id @default(cuid())
+  farmId       String
+  name         String
+  plantingType PlantingType @default(CANA_PLANTA)
+  variety      String?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       CropStatus   @default(PLANEJADA)
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  farm       Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cropAreas  CropArea[]
+  activities Activity[]
+  harvests   Harvest[]
+
+  @@map("crops")
+}
+
+model CropArea {
+  id     String @id @default(cuid())
+  cropId String
+  areaId String
+  sizeHa Float?
+
+  crop Crop @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  area Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@unique([cropId, areaId])
+  @@map("crop_areas")
+}
+
+// ============================================================
+// ACTIVITIES (ATIVIDADES)
+// ============================================================
+
+enum ActivityStatus {
+  A_FAZER
+  EM_PROGRESSO
+  CONCLUIDO
+}
+
+model ActivityType {
+  id       String   @id @default(cuid())
+  farmId   String
+  name     String
+  subtypes String[]
+  icon     String?  @default("activity")
+  color    String?  @default("#22c55e")
+
+  farm       Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([farmId, name])
+  @@map("activity_types")
+}
+
+model Activity {
+  id             String         @id @default(cuid())
+  farmId         String
+  code           String
+  activityTypeId String
+  subtype        String?
+  cropId         String?
+  team           String?
+  startDate      DateTime
+  endDate        DateTime?
+  status         ActivityStatus @default(A_FAZER)
+  totalHa        Float?
+  notes          String?
+  costOverride   Float?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  farm          Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  activityType  ActivityType    @relation(fields: [activityTypeId], references: [id])
+  crop          Crop?           @relation(fields: [cropId], references: [id])
+  activityAreas ActivityArea[]
+  inputUsages   InputUsage[]
+  logs          ActivityLog[]
+
+  @@unique([farmId, code])
+  @@map("activities")
+}
+
+model ActivityArea {
+  id         String @id @default(cuid())
+  activityId String
+  areaId     String
+  sizeHa     Float?
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  area     Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, areaId])
+  @@map("activity_areas")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  activityId String
+  userId     String
+  action     String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
+}
+
+// ============================================================
+// INPUTS / INVENTORY (INSUMOS / ESTOQUE)
+// ============================================================
+
+enum InputCategory {
+  HERBICIDA
+  INSETICIDA
+  FUNGICIDA
+  FERTILIZANTE
+  ADJUVANTE
+  SEMENTE
+  COMBUSTIVEL
+  OUTRO
+}
+
+enum UnitOfMeasure {
+  KG
+  L
+  T
+  UNIDADE
+  SACO
+  ML
+  G
+}
+
+model Input {
+  id           String        @id @default(cuid())
+  farmId       String
+  name         String
+  category     InputCategory
+  unit         UnitOfMeasure @default(L)
+  manufacturer String?
+  activeAgent  String?
+  description  String?
+  minStock     Float?        @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  farm             Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  inventoryEntries InventoryEntry[]
+  inputUsages      InputUsage[]
+  purchaseItems    PurchaseItem[]
+
+  @@unique([farmId, name])
+  @@map("inputs")
+}
+
+model InventoryEntry {
+  id            String   @id @default(cuid())
+  farmId        String
+  inputId       String
+  quantity      Float
+  reason        String
+  referenceId   String?
+  referenceType String?
+  batch         String?
+  unitCost      Float?
+  createdAt     DateTime @default(now())
+
+  farm  Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  input Input @relation(fields: [inputId], references: [id])
+
+  @@map("inventory_entries")
+}
+
+model InputUsage {
+  id         String  @id @default(cuid())
+  activityId String
+  inputId    String
+  quantity   Float
+  ratePerHa  Float?
+  notes      String?
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  input    Input    @relation(fields: [inputId], references: [id])
+
+  @@unique([activityId, inputId])
+  @@map("input_usages")
+}
+
+// ============================================================
+// SOIL ANALYSIS (ANALISE DE SOLO)
+// ============================================================
+
+model SoilAnalysis {
+  id          String   @id @default(cuid())
+  farmId      String
+  areaId      String
+  sampleDate  DateTime
+  labName     String?
+  labReportId String?
+  depth       String?  @default("0-20")
+  year        Int
+
+  // Macronutrients
+  pH              Float?
+  pHType          String?  @default("CaCl2")
+  organicMatter   Float?
+  phosphorus      Float?
+  potassium       Float?
+  calcium         Float?
+  magnesium       Float?
+  aluminum        Float?
+  hPlusAl         Float?
+
+  // Derived
+  sumOfBases          Float?
+  ctc                 Float?
+  baseSaturation      Float?
+  aluminumSaturation  Float?
+
+  // Micronutrients
+  sulfur    Float?
+  boron     Float?
+  copper    Float?
+  iron      Float?
+  manganese Float?
+  zinc      Float?
+
+  // Physical
+  clayPercent  Float?
+  siltPercent  Float?
+  sandPercent  Float?
+  textureClass String?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  area Area @relation(fields: [areaId], references: [id])
+
+  @@map("soil_analyses")
+}
+
+// ============================================================
+// FINANCIAL (FINANCEIRO)
+// ============================================================
+
+enum TransactionType {
+  RECEITA
+  DESPESA
+}
+
+enum TransactionStatus {
+  PENDENTE
+  PAGO
+  RECEBIDO
+  CANCELADO
+  ATRASADO
+}
+
+model BankAccount {
+  id             String  @id @default(cuid())
+  farmId         String
+  name           String
+  bankName       String?
+  agency         String?
+  accountNumber  String?
+  initialBalance Float   @default(0)
+  active         Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  farm         Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("bank_accounts")
+}
+
+model FinancialCategory {
+  id       String          @id @default(cuid())
+  farmId   String
+  name     String
+  type     TransactionType
+  parentId String?
+  color    String?         @default("#6366f1")
+  icon     String?
+
+  farm     Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  parent   FinancialCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children FinancialCategory[] @relation("CategoryHierarchy")
+  transactions Transaction[]
+
+  @@unique([farmId, name, type])
+  @@map("financial_categories")
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  farmId            String
+  type              TransactionType
+  status            TransactionStatus @default(PENDENTE)
+  categoryId        String?
+  bankAccountId     String?
+  description       String
+  amount            Float
+  dueDate           DateTime
+  paymentDate       DateTime?
+  competenceDate    DateTime?
+  documentNumber    String?
+  supplierId        String?
+  purchaseId        String?
+  harvestId         String?
+  parentId          String?
+  installmentNumber Int?
+  totalInstallments Int?
+  reconciled        Boolean           @default(false)
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  farm         Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  category     FinancialCategory? @relation(fields: [categoryId], references: [id])
+  bankAccount  BankAccount?       @relation(fields: [bankAccountId], references: [id])
+  supplier     Supplier?          @relation(fields: [supplierId], references: [id])
+  purchase     Purchase?          @relation(fields: [purchaseId], references: [id])
+  harvest      Harvest?           @relation(fields: [harvestId], references: [id])
+  parent       Transaction?       @relation("Installments", fields: [parentId], references: [id])
+  installments Transaction[]      @relation("Installments")
+
+  @@index([farmId, type, status])
+  @@index([farmId, dueDate])
+  @@map("transactions")
+}
+
+// ============================================================
+// SUPPLIERS (FORNECEDORES)
+// ============================================================
+
+model Supplier {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  document  String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm         Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  purchases    Purchase[]
+  transactions Transaction[]
+
+  @@unique([farmId, name])
+  @@map("suppliers")
+}
+
+// ============================================================
+// PURCHASES (COMPRAS)
+// ============================================================
+
+enum PurchaseStatus {
+  RASCUNHO
+  CONFIRMADA
+  RECEBIDA
+  CANCELADA
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  farmId         String
+  code           String
+  supplierId     String
+  status         PurchaseStatus @default(RASCUNHO)
+  purchaseDate   DateTime
+  deliveryDate   DateTime?
+  invoiceNumber  String?
+  invoiceKey     String?
+  totalAmount    Float          @default(0)
+  discountAmount Float          @default(0)
+  freightAmount  Float          @default(0)
+  paymentTerms   String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  farm         Farm           @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  supplier     Supplier       @relation(fields: [supplierId], references: [id])
+  items        PurchaseItem[]
+  transactions Transaction[]
+
+  @@unique([farmId, code])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String        @id @default(cuid())
+  purchaseId  String
+  inputId     String?
+  description String
+  quantity    Float
+  unit        UnitOfMeasure
+  unitPrice   Float
+  totalPrice  Float
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  input    Input?   @relation(fields: [inputId], references: [id])
+
+  @@map("purchase_items")
+}
+
+// ============================================================
+// HARVEST (COLHEITA)
+// ============================================================
+
+model Harvest {
+  id           String   @id @default(cuid())
+  farmId       String
+  cropId       String
+  areaId       String
+  harvestDate  DateTime
+  totalTons    Float
+  yieldTonsHa  Float?
+  tch          Float?
+  atr          Float?
+  brix         Float?
+  pol          Float?
+  fiber        Float?
+  purity       Float?
+  salePrice    Float?
+  buyerName    String?
+  ticketNumber String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  farm         Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  crop         Crop          @relation(fields: [cropId], references: [id])
+  area         Area          @relation(fields: [areaId], references: [id])
+  transactions Transaction[]
+
+  @@map("harvests")
+}
+
+// ============================================================
+// WEATHER RECORDS (REGISTROS METEOROLOGICOS)
+// ============================================================
+
+model WeatherRecord {
+  id        String   @id @default(cuid())
+  farmId    String
+  date      DateTime
+  tempMin   Float?
+  tempMax   Float?
+  rainfall  Float?
+  humidity  Float?
+  windSpeed Float?
+  source    String?  @default("MANUAL")
+  notes     String?
+  createdAt DateTime @default(now())
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([farmId, date])
+  @@map("weather_records")
+}

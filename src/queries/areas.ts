@@ -15,6 +15,23 @@ export async function getAreas(farmId: string) {
   })
 }
 
+export async function getAreasByCrop(farmId: string, cropId: string) {
+  return prisma.area.findMany({
+    where: {
+      farmId,
+      active: true,
+      cropAreas: { some: { cropId } },
+    },
+    include: {
+      cropAreas: {
+        where: { cropId },
+        select: { sizeHa: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  })
+}
+
 export async function getAreaById(farmId: string, areaId: string) {
   return prisma.area.findFirst({
     where: { id: areaId, farmId },

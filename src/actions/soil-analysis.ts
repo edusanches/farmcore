@@ -86,3 +86,87 @@ export async function deleteSoilAnalysis(farmId: string, analysisId: string) {
   revalidatePath("/analise-solo")
   return { success: true }
 }
+
+export type ImportSample = {
+  sampleId: string
+  areaId?: string | null
+  depth: string
+  sampleDate: string
+  labName: string
+  labReportId?: string
+  pH?: number
+  pHType?: string
+  organicMatter?: number
+  phosphorus?: number
+  potassium?: number
+  calcium?: number
+  magnesium?: number
+  aluminum?: number
+  hPlusAl?: number
+  sumOfBases?: number
+  ctc?: number
+  baseSaturation?: number
+  aluminumSaturation?: number
+  sulfur?: number
+  boron?: number
+  copper?: number
+  iron?: number
+  manganese?: number
+  zinc?: number
+  clayPercent?: number
+  siltPercent?: number
+  sandPercent?: number
+  textureClass?: string
+}
+
+export async function importSoilAnalyses(farmId: string, samples: ImportSample[]) {
+  const user = await requireAuth()
+  await requireFarmAccess(user.id, farmId, "MANAGER")
+
+  if (!samples.length) return { success: false, error: "Nenhuma amostra para importar" }
+
+  const importBatchId = `import_${Date.now()}`
+
+  const records = samples.map((s) => {
+    const year = new Date(s.sampleDate).getFullYear()
+    return {
+      farmId,
+      importBatchId,
+      sampleId: s.sampleId,
+      areaId: s.areaId ?? undefined,
+      sampleDate: new Date(s.sampleDate),
+      year,
+      labName: s.labName || null,
+      labReportId: s.labReportId || null,
+      depth: s.depth || "0-20",
+      pH: s.pH ?? null,
+      pHType: s.pHType ?? "CaCl2",
+      organicMatter: s.organicMatter ?? null,
+      phosphorus: s.phosphorus ?? null,
+      potassium: s.potassium ?? null,
+      calcium: s.calcium ?? null,
+      magnesium: s.magnesium ?? null,
+      aluminum: s.aluminum ?? null,
+      hPlusAl: s.hPlusAl ?? null,
+      sumOfBases: s.sumOfBases ?? null,
+      ctc: s.ctc ?? null,
+      baseSaturation: s.baseSaturation ?? null,
+      aluminumSaturation: s.aluminumSaturation ?? null,
+      sulfur: s.sulfur ?? null,
+      boron: s.boron ?? null,
+      copper: s.copper ?? null,
+      iron: s.iron ?? null,
+      manganese: s.manganese ?? null,
+      zinc: s.zinc ?? null,
+      clayPercent: s.clayPercent ?? null,
+      siltPercent: s.siltPercent ?? null,
+      sandPercent: s.sandPercent ?? null,
+      textureClass: s.textureClass ?? null,
+    }
+  })
+
+  const result = await prisma.soilAnalysis.createMany({ data: records })
+
+  revalidatePath("/analise-solo")
+  return { success: true, count: result.count, importBatchId }
+}

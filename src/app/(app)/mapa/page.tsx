@@ -1,17 +1,22 @@
 import { requireAuth, getUserActiveFarm } from "@/lib/permissions"
 import { redirect } from "next/navigation"
 import { getAreas } from "@/queries/areas"
+import { getLatestNdviByFarm } from "@/queries/ndvi"
 import { MapClient } from "@/components/map/map-client"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin } from "lucide-react"
 import type { MapArea } from "@/components/map/farm-map"
+import { formatDate } from "@/lib/constants"
 
 export default async function MapaPage() {
   const user = await requireAuth()
   const membership = await getUserActiveFarm(user.id)
   if (!membership) redirect("/login")
 
-  const dbAreas = await getAreas(membership.farmId)
+  const [dbAreas, ndviMap] = await Promise.all([
+    getAreas(membership.farmId),
+    getLatestNdviByFarm(membership.farmId),
+  ])
 
   const areas: MapArea[] = dbAreas
     .filter((a) => a.geojson !== null && a.geojson !== undefined)
@@ -23,6 +28,12 @@ export default async function MapaPage() {
       sizeHa: a.sizeHa,
     }))
 
+  const ndviData = Array.from(ndviMap.entries()).map(([areaId, data]) => ({
+    areaId,
+    mean: data.mean,
+    date: formatDate(data.date),
+  }))
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,10 +44,10 @@ export default async function MapaPage() {
       </div>
 
       {areas.length > 0 ? (
-        <Card>
-          <CardContent className="p-0 overflow-hidden rounded-md">
-            <div className="h-[600px]">
-              <MapClient areas={areas} />
+        <Card className="py-0 overflow-hidden">
+          <CardContent className="p-0">
+            <div className="h-[calc(100vh-16rem)]">
+              <MapClient areas={areas} ndviData={ndviData} showNdviImages />
             </div>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { type FarmRole, type ActivityStatus, type InputCategory, type UnitOfMeasure, type PlantingType, type CropStatus, type TransactionType, type TransactionStatus, type PurchaseStatus } from "@/generated/prisma/client"
+import { type FarmRole, type ActivityStatus, type ActivityKind, type InputCategory, type UnitOfMeasure, type PlantingType, type CropStatus, type TransactionType, type TransactionStatus, type PurchaseStatus, type NfeImportStatus, type SupplierType } from "@/generated/prisma/client"
 
 export const FARM_ROLE_LABELS: Record<FarmRole, string> = {
   OWNER: "Proprietario",
@@ -11,13 +11,25 @@ export const FARM_ROLE_LABELS: Record<FarmRole, string> = {
 export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
   A_FAZER: "A Fazer",
   EM_PROGRESSO: "Em Progresso",
+  REVISAR: "Revisar",
   CONCLUIDO: "Concluido",
 }
 
 export const ACTIVITY_STATUS_COLORS: Record<ActivityStatus, string> = {
   A_FAZER: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   EM_PROGRESSO: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  REVISAR: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   CONCLUIDO: "bg-green-500/20 text-green-400 border-green-500/30",
+}
+
+export const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
+  PLANEJADO: "Planejado",
+  REALIZADO: "Realizado",
+}
+
+export const ACTIVITY_KIND_COLORS: Record<ActivityKind, string> = {
+  PLANEJADO: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  REALIZADO: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
 }
 
 export const INPUT_CATEGORY_LABELS: Record<InputCategory, string> = {
@@ -53,6 +65,55 @@ export const CROP_STATUS_LABELS: Record<CropStatus, string> = {
   FINALIZADA: "Finalizada",
 }
 
+export const CULTURE_LABELS: Record<string, string> = {
+  CANA_DE_ACUCAR: "Cana-de-acucar",
+  SOJA: "Soja",
+  MILHO: "Milho",
+  CAFE: "Cafe",
+  ALGODAO: "Algodao",
+  TRIGO: "Trigo",
+  ARROZ: "Arroz",
+  FEIJAO: "Feijao",
+  SORGO: "Sorgo",
+  AMENDOIM: "Amendoim",
+  LARANJA: "Laranja",
+  EUCALIPTO: "Eucalipto",
+  PASTAGEM: "Pastagem",
+  OUTRO: "Outro",
+}
+
+export const MEASUREMENT_UNIT_LABELS: Record<string, string> = {
+  SACO_30KG: "Sacos de 30kg",
+  SACO_40KG: "Sacos de 40kg",
+  SACO_50KG: "Sacos de 50kg",
+  SACO_60KG: "Sacos de 60kg",
+  CAIXA_40_8KG: "Caixas de 40,8kg",
+  GRAMAS: "Gramas",
+  KG: "Quilos",
+  MG: "Miligramas",
+  TONELADA: "Toneladas",
+}
+
+export const HARVEST_DISCOUNT_OPTIONS: { key: string; label: string }[] = [
+  { key: "atr", label: "ATR (Kg/Ton)" },
+  { key: "ardidos", label: "Ardidos (%)" },
+  { key: "avariados", label: "Avariados (%)" },
+  { key: "brocado", label: "Brocado (%)" },
+  { key: "carunchados", label: "Carunchados (%)" },
+  { key: "contaminados", label: "Contaminados (%)" },
+  { key: "descoloridos", label: "Descoloridos (%)" },
+  { key: "esverdeados", label: "Esverdeados (%)" },
+  { key: "germinados", label: "Germinados (%)" },
+  { key: "gessado", label: "Gessado (%)" },
+  { key: "impureza", label: "Impureza (%)" },
+  { key: "mofados", label: "Mofados (%)" },
+  { key: "ph_peso", label: "PH (Kg/hl)" },
+  { key: "quebrados", label: "Quebrados (%)" },
+  { key: "servicos", label: "Servicos (%)" },
+  { key: "taxa_recepcao", label: "Taxa de recepcao (%)" },
+  { key: "umidade", label: "Umidade (%)" },
+]
+
 export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   RECEITA: "Receita",
   DESPESA: "Despesa",
@@ -79,6 +140,30 @@ export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
   CONFIRMADA: "Confirmada",
   RECEBIDA: "Recebida",
   CANCELADA: "Cancelada",
+}
+
+export const NFE_IMPORT_STATUS_LABELS: Record<NfeImportStatus, string> = {
+  PENDENTE: "Pendente",
+  APROVADA: "Aprovada",
+  REJEITADA: "Rejeitada",
+}
+
+export const SUPPLIER_TYPE_LABELS: Record<SupplierType, string> = {
+  PRODUTOS: "Produtos",
+  SERVICOS: "Servicos",
+  OUTRO: "Outro",
+}
+
+export const SUPPLIER_TYPE_COLORS: Record<SupplierType, string> = {
+  PRODUTOS: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  SERVICOS: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  OUTRO: "bg-muted text-muted-foreground border-muted",
+}
+
+export const NFE_IMPORT_STATUS_COLORS: Record<NfeImportStatus, string> = {
+  PENDENTE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  APROVADA: "bg-green-500/20 text-green-400 border-green-500/30",
+  REJEITADA: "bg-muted text-muted-foreground border-muted",
 }
 
 export const SUGARCANE_IDEAL_RANGES = {
@@ -113,5 +198,5 @@ export function formatNumber(value: number, decimals = 2): string {
 }
 
 export function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(date))
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(date))
 }

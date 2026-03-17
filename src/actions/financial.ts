@@ -19,6 +19,35 @@ export async function createBankAccount(farmId: string, data: unknown) {
   return { success: true, account }
 }
 
+export async function setDefaultBankAccount(farmId: string, accountId: string) {
+  const user = await requireAuth()
+  await requireFarmAccess(user.id, farmId, "MANAGER")
+
+  await prisma.bankAccount.updateMany({ where: { farmId }, data: { isDefault: false } })
+  await prisma.bankAccount.update({ where: { id: accountId }, data: { isDefault: true } })
+
+  revalidatePath("/financeiro")
+  return { success: true }
+}
+
+export async function updateBankAccount(farmId: string, accountId: string, data: unknown) {
+  const user = await requireAuth()
+  await requireFarmAccess(user.id, farmId, "MANAGER")
+
+  const parsed = bankAccountSchema.parse(data)
+
+  const existing = await prisma.bankAccount.findFirst({ where: { id: accountId, farmId } })
+  if (!existing) throw new Error("Conta nao encontrada")
+
+  const account = await prisma.bankAccount.update({
+    where: { id: accountId },
+    data: parsed,
+  })
+
+  revalidatePath("/financeiro")
+  return { success: true, account }
+}
+
 export async function createTransaction(farmId: string, data: unknown) {
   const user = await requireAuth()
   await requireFarmAccess(user.id, farmId, "ACCOUNTANT")
@@ -96,6 +125,22 @@ export async function reconcileTransaction(farmId: string, transactionId: string
   const transaction = await prisma.transaction.update({
     where: { id: transactionId },
     data: { reconciled: true },
+  })
+
+  revalidatePath("/financeiro")
+  return { success: true, transaction }
+}
+
+export async function updateTransaction(farmId: string, transactionId: string, data: unknown) {
+  const user = await requireAuth()
+  await requireFarmAccess(user.id, farmId, "ACCOUNTANT")
+
+  const parsed = transactionSchema.parse(data)
+  const { installments: _, ...txData } = parsed
+
+  const transaction = await prisma.transaction.update({
+    where: { id: transactionId, farmId },
+    data: txData,
   })
 
   revalidatePath("/financeiro")

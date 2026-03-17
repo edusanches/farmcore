@@ -3,6 +3,11 @@ import { redirect } from "next/navigation"
 import { getCrops } from "@/queries/crops"
 import Link from "next/link"
 import { Plus, Sprout, MapPin, ClipboardList } from "lucide-react"
+import {
+  CROP_STATUS_LABELS,
+  PLANTING_TYPE_LABELS,
+  CULTURE_LABELS,
+} from "@/lib/constants"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,52 +22,12 @@ import {
 
 function getStatusBadgeVariant(status: string) {
   switch (status) {
-    case "PLANNING":
-      return "outline"
-    case "PLANTING":
-      return "default"
-    case "GROWING":
-      return "default"
-    case "HARVESTING":
-      return "default"
-    case "COMPLETED":
-      return "secondary"
-    case "CANCELLED":
-      return "destructive"
+    case "EM_ANDAMENTO":
+      return "default" as const
+    case "FINALIZADA":
+      return "secondary" as const
     default:
-      return "outline"
-  }
-}
-
-function getStatusLabel(status: string) {
-  switch (status) {
-    case "PLANNING":
-      return "Planejamento"
-    case "PLANTING":
-      return "Plantio"
-    case "GROWING":
-      return "Crescimento"
-    case "HARVESTING":
-      return "Colheita"
-    case "COMPLETED":
-      return "Concluida"
-    case "CANCELLED":
-      return "Cancelada"
-    default:
-      return status
-  }
-}
-
-function getPlantingTypeLabel(type: string) {
-  switch (type) {
-    case "PLANTA":
-      return "Planta"
-    case "SOCA":
-      return "Soca"
-    case "RESSOCA":
-      return "Ressoca"
-    default:
-      return type
+      return "outline" as const
   }
 }
 
@@ -118,16 +83,21 @@ export default async function SafrasPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{crop.name}</CardTitle>
                     <Badge variant={getStatusBadgeVariant(crop.status)}>
-                      {getStatusLabel(crop.status)}
+                      {CROP_STATUS_LABELS[crop.status as keyof typeof CROP_STATUS_LABELS] ?? crop.status}
                     </Badge>
                   </div>
-                  {crop.plantingType && (
-                    <CardDescription>
-                      <Badge variant="outline" className="mt-1">
-                        {getPlantingTypeLabel(crop.plantingType)}
+                  <CardDescription className="flex gap-1.5 mt-1">
+                    {(crop as any).culture && (
+                      <Badge variant="outline">
+                        {CULTURE_LABELS[(crop as any).culture as string] ?? (crop as any).culture}
                       </Badge>
-                    </CardDescription>
-                  )}
+                    )}
+                    {crop.plantingType && (
+                      <Badge variant="outline">
+                        {PLANTING_TYPE_LABELS[crop.plantingType as keyof typeof PLANTING_TYPE_LABELS] ?? crop.plantingType}
+                      </Badge>
+                    )}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

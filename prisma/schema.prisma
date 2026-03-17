@@ -84,6 +84,7 @@ model Farm {
   crops            Crop[]
   activities       Activity[]
   activityTypes    ActivityType[]
+  stocks           Stock[]
   inputs           Input[]
   inventoryEntries InventoryEntry[]
   soilAnalyses     SoilAnalysis[]
@@ -94,6 +95,9 @@ model Farm {
   purchases        Purchase[]
   harvests         Harvest[]
   weatherRecords   WeatherRecord[]
+  contractors      Contractor[]
+  certificate      FarmCertificate?
+  nfeImports       NfeImport[]
 
   @@map("farms")
 }
@@ -142,9 +146,30 @@ model Area {
   activityAreas ActivityArea[]
   soilAnalyses  SoilAnalysis[]
   harvests      Harvest[]
+  ndviReadings  NdviReading[]
 
   @@unique([farmId, name])
   @@map("areas")
+}
+
+model NdviReading {
+  id            String   @id @default(cuid())
+  areaId        String
+  date          DateTime @db.Date
+  mean          Float
+  min           Float
+  max           Float
+  stDev         Float?
+  cloudCoverage Float?
+  sampleCount   Int?
+  noDataCount   Int?
+  createdAt     DateTime @default(now())
+
+  area Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@unique([areaId, date])
+  @@index([areaId, date])
+  @@map("ndvi_readings")
 }
 
 // ============================================================
@@ -164,22 +189,28 @@ enum CropStatus {
 }
 
 model Crop {
-  id           String       @id @default(cuid())
-  farmId       String
-  name         String
-  plantingType PlantingType @default(CANA_PLANTA)
-  variety      String?
-  startDate    DateTime?
-  endDate      DateTime?
-  status       CropStatus   @default(PLANEJADA)
-  notes        String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id                     String       @id @default(cuid())
+  farmId                 String
+  name                   String
+  culture                String       @default("CANA_DE_ACUCAR")
+  plantingType           PlantingType @default(CANA_PLANTA)
+  variety                String?
+  startDate              DateTime?
+  endDate                DateTime?
+  status                 CropStatus   @default(PLANEJADA)
+  measurementUnit        String?      // Unidade de medida padrao (ex: "SACO_60KG", "TONELADA", "KG")
+  grossWeightDiscounts   Json?        // Descontos no peso bruto (array de strings)
+  netWeightDiscounts     Json?        // Descontos apos remocao de impurezas (array de strings)
+  defaultInputStockId    String?
+  notes                  String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
-  farm       Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  cropAreas  CropArea[]
-  activities Activity[]
-  harvests   Harvest[]
+  farm              Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  defaultInputStock Stock?     @relation("DefaultInputStock", fields: [defaultInputStockId], references: [id])
+  cropAreas         CropArea[]
+  activities        Activity[]
+  harvests          Harvest[]
 
   @@map("crops")
 }
@@ -204,7 +235,13 @@ model CropArea {
 enum ActivityStatus {
   A_FAZER
   EM_PROGRESSO
+  REVISAR
   CONCLUIDO
+}
+
+enum ActivityKind {
+  PLANEJADO
+  REALIZADO
 }
 
 model ActivityType {
@@ -223,28 +260,34 @@ model ActivityType {
 }
 
 model Activity {
-  id             String         @id @default(cuid())
-  farmId         String
-  code           String
-  activityTypeId String
-  subtype        String?
-  cropId         String?
-  team           String?
-  startDate      DateTime
-  endDate        DateTime?
-  status         ActivityStatus @default(A_FAZER)
-  totalHa        Float?
-  notes          String?
-  costOverride   Float?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id                String         @id @default(cuid())
+  farmId            String
+  code              String
+  activityTypeId    String
+  subtype           String?
+  cropId            String?
+  team              String?
+  startDate         DateTime
+  endDate           DateTime?
+  status            ActivityStatus @default(A_FAZER)
+  kind              ActivityKind   @default(REALIZADO)
+  plannedActivityId String?
+  stockId           String?
+  totalHa           Float?
+  notes             String?
+  costOverride      Float?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  farm          Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  activityType  ActivityType    @relation(fields: [activityTypeId], references: [id])
-  crop          Crop?           @relation(fields: [cropId], references: [id])
-  activityAreas ActivityArea[]
-  inputUsages   InputUsage[]
-  logs          ActivityLog[]
+  farm            Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  activityType    ActivityType    @relation(fields: [activityTypeId], references: [id])
+  crop            Crop?           @relation(fields: [cropId], references: [id])
+  plannedActivity Activity?       @relation("ActivityRealization", fields: [plannedActivityId], references: [id])
+  realizations    Activity[]      @relation("ActivityRealization")
+  stock           Stock?          @relation(fields: [stockId], references: [id])
+  activityAreas   ActivityArea[]
+  inputUsages     InputUsage[]
+  logs            ActivityLog[]
 
   @@unique([farmId, code])
   @@map("activities")
@@ -275,6 +318,32 @@ model ActivityLog {
   user     User     @relation(fields: [userId], references: [id])
 
   @@map("activity_logs")
+}
+
+// ============================================================
+// STOCKS / WAREHOUSES (ESTOQUES / ARMAZENS)
+// ============================================================
+
+enum StockType {
+  INSUMOS
+  PRODUCAO
+}
+
+model Stock {
+  id        String    @id @default(cuid())
+  farmId    String
+  name      String
+  type      StockType
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  farm           Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cropsAsDefault Crop[]     @relation("DefaultInputStock")
+  activities     Activity[]
+
+  @@unique([farmId, name])
+  @@map("stocks")
 }
 
 // ============================================================
@@ -362,14 +431,16 @@ model InputUsage {
 // ============================================================
 
 model SoilAnalysis {
-  id          String   @id @default(cuid())
-  farmId      String
-  areaId      String
-  sampleDate  DateTime
-  labName     String?
-  labReportId String?
-  depth       String?  @default("0-20")
-  year        Int
+  id            String   @id @default(cuid())
+  farmId        String
+  areaId        String?
+  sampleId      String?  // lab identifier: "GRIDE 01", "T.2 P.1", etc.
+  importBatchId String?  // groups samples imported together
+  sampleDate    DateTime
+  labName       String?
+  labReportId   String?
+  depth         String?  @default("0-20")
+  year          Int
 
   // Macronutrients
   pH              Float?
@@ -406,8 +477,8 @@ model SoilAnalysis {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  area Area @relation(fields: [areaId], references: [id])
+  farm Farm  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  area Area? @relation(fields: [areaId], references: [id])
 
   @@map("soil_analyses")
 }
@@ -436,8 +507,10 @@ model BankAccount {
   bankName       String?
   agency         String?
   accountNumber  String?
-  initialBalance Float   @default(0)
-  active         Boolean @default(true)
+  initialBalance     Float    @default(0)
+  initialBalanceDate DateTime @default(now())
+  isDefault          Boolean  @default(false)
+  active             Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -497,6 +570,7 @@ model Transaction {
   harvest      Harvest?           @relation(fields: [harvestId], references: [id])
   parent       Transaction?       @relation("Installments", fields: [parentId], references: [id])
   installments Transaction[]      @relation("Installments")
+  nfeImport    NfeImport?
 
   @@index([farmId, type, status])
   @@index([farmId, dueDate])
@@ -507,24 +581,51 @@ model Transaction {
 // SUPPLIERS (FORNECEDORES)
 // ============================================================
 
+enum SupplierType {
+  PRODUTOS
+  SERVICOS
+  OUTRO
+}
+
 model Supplier {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   farmId    String
   name      String
   document  String?
+  types     SupplierType[] @default([OUTRO])
   phone     String?
+  whatsapp  String?
   email     String?
   address   String?
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  farm         Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  farm         Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
   purchases    Purchase[]
   transactions Transaction[]
+  nfeImports   NfeImport[]
+  contacts     SupplierContact[]
 
   @@unique([farmId, name])
   @@map("suppliers")
+}
+
+model SupplierContact {
+  id         String   @id @default(cuid())
+  supplierId String
+  name       String
+  role       String?
+  phone      String?
+  whatsapp   String?
+  email      String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@map("supplier_contacts")
 }
 
 // ============================================================
@@ -560,6 +661,7 @@ model Purchase {
   supplier     Supplier       @relation(fields: [supplierId], references: [id])
   items        PurchaseItem[]
   transactions Transaction[]
+  nfeImport    NfeImport?
 
   @@unique([farmId, code])
   @@map("purchases")
@@ -615,6 +717,25 @@ model Harvest {
 }
 
 // ============================================================
+// CONTRACTORS (TERCEIRIZADOS)
+// ============================================================
+
+model Contractor {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([farmId, name])
+  @@map("contractors")
+}
+
+// ============================================================
 // WEATHER RECORDS (REGISTROS METEOROLOGICOS)
 // ============================================================
 
@@ -635,4 +756,89 @@ model WeatherRecord {
 
   @@unique([farmId, date])
   @@map("weather_records")
+}
+
+// ============================================================
+// NFE CERTIFICATES & IMPORTS (NOTAS FISCAIS)
+// ============================================================
+
+model FarmCertificate {
+  id                String    @id @default(cuid())
+  farmId            String    @unique
+  subjectName       String?
+  serialNumber      String?
+  validFrom         DateTime?
+  validTo           DateTime?
+  pfxEncrypted      Bytes
+  pfxIv             String
+  pfxAuthTag        String
+  passwordEncrypted Bytes
+  passwordIv        String
+  passwordAuthTag   String
+  lastNsu           String    @default("0")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@map("farm_certificates")
+}
+
+enum NfeImportStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
+model NfeImport {
+  id              String          @id @default(cuid())
+  farmId          String
+  chaveAcesso     String          @unique
+  numero          String?
+  serie           String?
+  dataEmissao     DateTime?
+  xmlContent      String          @db.Text
+  emitenteCnpj    String?
+  emitenteNome    String?
+  emitenteUf      String?
+  valorTotal      Float           @default(0)
+  valorProdutos   Float           @default(0)
+  valorFrete      Float           @default(0)
+  valorDesconto   Float           @default(0)
+  status          NfeImportStatus @default(PENDENTE)
+  supplierId      String?
+  transactionId   String?         @unique
+  purchaseId      String?         @unique
+  rejectionReason String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  farm        Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+  transaction Transaction?  @relation(fields: [transactionId], references: [id])
+  purchase    Purchase?     @relation(fields: [purchaseId], references: [id])
+  items       NfeImportItem[]
+
+  @@index([farmId, status])
+  @@index([farmId, dataEmissao])
+  @@map("nfe_imports")
+}
+
+model NfeImportItem {
+  id            String  @id @default(cuid())
+  nfeImportId   String
+  codigo        String?
+  descricao     String
+  ncm           String?
+  cfop          String?
+  unidade       String?
+  quantidade    Float
+  valorUnitario Float
+  valorTotal    Float
+
+  nfeImport NfeImport @relation(fields: [nfeImportId], references: [id], onDelete: Cascade)
+
+  @@map("nfe_import_items")
 }

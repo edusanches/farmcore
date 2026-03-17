@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import type { MapArea } from "./farm-map"
+import type { MapArea, NdviData } from "./farm-map"
 
 const FarmMap = dynamic(() => import("./farm-map"), {
   ssr: false,
@@ -14,8 +14,10 @@ const FarmMap = dynamic(() => import("./farm-map"), {
 
 interface MapClientProps {
   areas: MapArea[]
+  ndviData?: NdviData[]
+  showNdviImages?: boolean
 }
 
-export function MapClient({ areas }: MapClientProps) {
-  return <FarmMap areas={areas} />
+export function MapClient({ areas, ndviData, showNdviImages }: MapClientProps) {
+  return <FarmMap areas={areas} ndviData={ndviData} showNdviImages={showNdviImages} />
 }

@@ -4,25 +4,18 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
   BadgeCheck,
-  BarChart3,
   ChevronRight,
   ChevronsUpDown,
-  ClipboardList,
-  FlaskConical,
   Grid3x3,
-  Home,
   Leaf,
   LogOut,
-  Map,
-  Package,
   Settings,
-  ShoppingCart,
   Sprout,
-  Truck,
-  Wallet,
+  X,
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { useFarm } from "@/providers/farm-provider"
+import { useNavigation } from "@/providers/navigation-provider"
 import {
   Sidebar,
   SidebarContent,
@@ -34,6 +27,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
@@ -73,41 +67,6 @@ interface AppSidebarProps {
   }
 }
 
-const navSections = [
-  {
-    label: "Principal",
-    items: [
-      { title: "Inicio", href: "/dashboard", icon: Home },
-      { title: "Mapa", href: "/mapa", icon: Map },
-      { title: "Areas", href: "/areas", icon: Grid3x3 },
-      { title: "Safras", href: "/safras", icon: Leaf },
-    ],
-  },
-  {
-    label: "Operacoes",
-    items: [
-      { title: "Atividades", href: "/atividades", icon: ClipboardList },
-      { title: "Analise de Solo", href: "/analise-solo", icon: FlaskConical },
-      { title: "Insumos", href: "/insumos", icon: Package },
-      { title: "Colheita", href: "/colheita", icon: Truck },
-    ],
-  },
-  {
-    label: "Financeiro",
-    items: [
-      { title: "Financeiro", href: "/financeiro", icon: Wallet },
-      { title: "Compras", href: "/compras", icon: ShoppingCart },
-    ],
-  },
-  {
-    label: "Sistema",
-    items: [
-      { title: "Indicadores", href: "/indicadores", icon: BarChart3 },
-      { title: "Configuracoes", href: "/configuracoes", icon: Settings },
-    ],
-  },
-]
-
 function getInitials(name?: string | null) {
   if (!name) return "U"
   return name
@@ -118,9 +77,55 @@ function getInitials(name?: string | null) {
     .toUpperCase()
 }
 
+function getRoleLabel(role?: string) {
+  switch (role) {
+    case "OWNER": return "Proprietario"
+    case "MANAGER": return "Gerente"
+    case "ACCOUNTANT": return "Contador"
+    case "WORKER": return "Trabalhador"
+    case "VIEWER": return "Visualizador"
+    default: return "Selecione uma fazenda"
+  }
+}
+
+function SidebarContextIndicator() {
+  const { context, safra, area } = useNavigation()
+
+  if (context.level === "farm") return null
+
+  return (
+    <>
+      <SidebarSeparator />
+      <div className="px-3 py-2 space-y-1">
+        {safra && (
+          <Link
+            href="/safras"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <Leaf className="size-3 shrink-0" />
+            <span className="truncate font-medium">{safra.name}</span>
+            <X className="size-3 ml-auto shrink-0" />
+          </Link>
+        )}
+        {context.level === "area" && area && (
+          <Link
+            href={`/safras/${context.safraId}`}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 pl-5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <Grid3x3 className="size-3 shrink-0" />
+            <span className="truncate font-medium">{area.name}</span>
+            <X className="size-3 ml-auto shrink-0" />
+          </Link>
+        )}
+      </div>
+    </>
+  )
+}
+
 export function AppSidebar({ farms, activeFarm: initialActiveFarm, user }: AppSidebarProps) {
   const pathname = usePathname()
   const { activeFarm, setActiveFarm } = useFarm()
+  const { navSections } = useNavigation()
 
   const currentFarm = activeFarm ?? initialActiveFarm
 
@@ -143,17 +148,7 @@ export function AppSidebar({ farms, activeFarm: initialActiveFarm, user }: AppSi
                       {currentFarm?.farm.name ?? "FarmCore"}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
-                      {currentFarm?.role === "OWNER"
-                        ? "Proprietario"
-                        : currentFarm?.role === "MANAGER"
-                          ? "Gerente"
-                          : currentFarm?.role === "ACCOUNTANT"
-                            ? "Contador"
-                            : currentFarm?.role === "WORKER"
-                              ? "Trabalhador"
-                              : currentFarm?.role === "VIEWER"
-                                ? "Visualizador"
-                                : "Selecione uma fazenda"}
+                      {getRoleLabel(currentFarm?.role)}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4" />
@@ -187,6 +182,7 @@ export function AppSidebar({ farms, activeFarm: initialActiveFarm, user }: AppSi
             </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
+        <SidebarContextIndicator />
       </SidebarHeader>
 
       <SidebarContent>
@@ -203,7 +199,9 @@ export function AppSidebar({ farms, activeFarm: initialActiveFarm, user }: AppSi
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {section.items.map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                      const isActive = item.exact
+                        ? pathname === item.href
+                        : pathname === item.href || pathname.startsWith(item.href + "/")
                       return (
                         <SidebarMenuItem key={item.href}>
                           <SidebarMenuButton

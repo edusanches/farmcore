@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma"
 
-export async function getHarvests(farmId: string) {
+export async function getHarvests(farmId: string, cropId?: string) {
   return prisma.harvest.findMany({
-    where: { farmId },
+    where: { farmId, ...(cropId && { cropId }) },
     include: {
       crop: { select: { id: true, name: true } },
       area: { select: { id: true, name: true, sizeHa: true } },

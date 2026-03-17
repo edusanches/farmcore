@@ -1,9 +1,14 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { BadgeCheck, LogOut, Settings } from "lucide-react"
-import { signOut } from "next-auth/react"
+import {
+  ChevronDown,
+  Grid3x3,
+  Leaf,
+} from "lucide-react"
+import { useNavigation } from "@/providers/navigation-provider"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -22,17 +27,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
-
-interface AppHeaderProps {
-  user: {
-    id: string
-    name?: string | null
-    email?: string | null
-    image?: string | null
-  }
-}
+import { Badge } from "@/components/ui/badge"
+import { CROP_STATUS_LABELS } from "@/lib/constants"
 
 const routeLabels: Record<string, string> = {
   dashboard: "Inicio",
@@ -48,29 +45,198 @@ const routeLabels: Record<string, string> = {
   indicadores: "Indicadores",
   configuracoes: "Configuracoes",
   perfil: "Perfil",
+  custo: "Custo Realizado",
+  "custo-orcado": "Custo Orcado",
+  nova: "Nova",
+  "nova-transacao": "Nova Transacao",
 }
 
-function getInitials(name?: string | null) {
-  if (!name) return "U"
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
+function ContextSelectors() {
+  const router = useRouter()
+  const { context, safras, safra, safraAreas, area } = useNavigation()
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {/* Safra selector */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-accent transition-colors outline-none">
+            <Leaf className="size-3 text-primary" />
+            <span className="max-w-[140px] truncate">
+              {safra ? safra.name : "Safra"}
+            </span>
+            <ChevronDown className="size-3 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">
+            Safras
+          </DropdownMenuLabel>
+          {context.level !== "farm" && (
+            <>
+              <DropdownMenuItem onClick={() => router.push("/safras")}>
+                <span className="text-muted-foreground">Todas as safras</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {safras.length === 0 ? (
+            <DropdownMenuItem disabled>
+              <span className="text-muted-foreground">Nenhuma safra</span>
+            </DropdownMenuItem>
+          ) : (
+            safras.map((s) => (
+              <DropdownMenuItem
+                key={s.id}
+                onClick={() => router.push(`/safras/${s.id}`)}
+                className="flex items-center justify-between"
+              >
+                <span className="truncate">{s.name}</span>
+                <Badge
+                  variant={s.status === "EM_ANDAMENTO" ? "default" : "outline"}
+                  className="ml-2 text-[10px] px-1.5 py-0"
+                >
+                  {(CROP_STATUS_LABELS as Record<string, string>)[s.status] ?? s.status}
+                </Badge>
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Area selector — only when in safra or area context */}
+      {context.level !== "farm" && safra && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-accent transition-colors outline-none">
+              <Grid3x3 className="size-3 text-primary" />
+              <span className="max-w-[140px] truncate">
+                {area ? area.name : "Talhao"}
+              </span>
+              <ChevronDown className="size-3 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Talhoes da safra
+            </DropdownMenuLabel>
+            {context.level === "area" && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => router.push(`/safras/${context.safraId}`)}
+                >
+                  <span className="text-muted-foreground">Todos os talhoes</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {safraAreas.length === 0 ? (
+              <DropdownMenuItem disabled>
+                <span className="text-muted-foreground">Nenhum talhao vinculado</span>
+              </DropdownMenuItem>
+            ) : (
+              safraAreas.map((a) => (
+                <DropdownMenuItem
+                  key={a.id}
+                  onClick={() =>
+                    router.push(`/safras/${context.safraId}/areas/${a.id}`)
+                  }
+                >
+                  <span className="truncate">{a.name}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {a.sizeHa} ha
+                  </span>
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
 }
 
-export function AppHeader({ user }: AppHeaderProps) {
+// Check if a segment looks like a database ID (CUID, UUID, etc.) rather than a route name
+function looksLikeId(segment: string): boolean {
+  // CUIDs start with 'c' and are 25+ chars of lowercase alphanumeric
+  if (/^c[a-z0-9]{20,}$/.test(segment)) return true
+  // UUIDs
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment)) return true
+  return false
+}
+
+// Maps parent route to API endpoint for resolving entity names
+const entityResolvers: Record<string, string> = {
+  areas: "/api/entity-name?type=area&id=",
+  safras: "/api/entity-name?type=crop&id=",
+  financeiro: "/api/entity-name?type=transaction&id=",
+  fornecedores: "/api/entity-name?type=supplier&id=",
+}
+
+export function AppHeader() {
   const pathname = usePathname()
+  const { context, safra, area } = useNavigation()
 
   const segments = pathname.split("/").filter(Boolean)
 
-  const breadcrumbs = segments.map((segment, index) => {
-    const href = "/" + segments.slice(0, index + 1).join("/")
-    const label = routeLabels[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1)
-    const isLast = index === segments.length - 1
-    return { href, label, isLast }
-  })
+  // Find segments that look like IDs and need resolving
+  const unresolvedIds = useMemo(() => {
+    const ids: { segment: string; parentSegment: string }[] = []
+    for (let i = 1; i < segments.length; i++) {
+      const segment = segments[i]
+      const parentSegment = segments[i - 1]
+      // Skip if already resolved by navigation context
+      if (context.safraId && segment === context.safraId) continue
+      if (context.areaId && segment === context.areaId) continue
+      if (looksLikeId(segment) && entityResolvers[parentSegment]) {
+        ids.push({ segment, parentSegment })
+      }
+    }
+    return ids
+  }, [segments, context.safraId, context.areaId])
+
+  // Resolve entity names for unknown IDs
+  const [resolvedNames, setResolvedNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (unresolvedIds.length === 0) return
+    for (const { segment, parentSegment } of unresolvedIds) {
+      if (resolvedNames[segment]) continue
+      const endpoint = entityResolvers[parentSegment]
+      if (!endpoint) continue
+      fetch(endpoint + segment)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.name) {
+            setResolvedNames((prev) => ({ ...prev, [segment]: data.name }))
+          }
+        })
+        .catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unresolvedIds])
+
+  // Build breadcrumbs, resolving dynamic IDs to names
+  const breadcrumbs = segments
+    .map((segment, index) => {
+      const href = "/" + segments.slice(0, index + 1).join("/")
+
+      // Skip rendering raw IDs as separate breadcrumbs when we have the name
+      if (context.safraId && segment === context.safraId) {
+        return { href, label: safra?.name ?? "Safra", isLast: index === segments.length - 1 }
+      }
+      if (context.areaId && segment === context.areaId) {
+        return { href, label: area?.name ?? "Talhao", isLast: index === segments.length - 1 }
+      }
+
+      // Check resolved names for ID segments
+      if (resolvedNames[segment]) {
+        return { href, label: resolvedNames[segment], isLast: index === segments.length - 1 }
+      }
+
+      const label = routeLabels[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1)
+      const isLast = index === segments.length - 1
+      return { href, label, isLast }
+    })
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -97,57 +263,10 @@ export function AppHeader({ user }: AppHeaderProps) {
         </Breadcrumb>
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-3">
+        <ContextSelectors />
+        <Separator orientation="vertical" className="h-4" />
         <ThemeToggle />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-accent transition-colors outline-none">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user.image ?? undefined} alt={user.name ?? "Usuario"} />
-                <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                  {getInitials(user.name)}
-                </AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-lg">
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-2 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.image ?? undefined} alt={user.name ?? "Usuario"} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{user.name ?? "Usuario"}</span>
-                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/perfil" className="gap-2">
-                <BadgeCheck className="size-4" />
-                Perfil
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/configuracoes" className="gap-2">
-                <Settings className="size-4" />
-                Configuracoes
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-            >
-              <LogOut className="size-4" />
-              Sair
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </header>
   )

@@ -31,12 +31,60 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { TransactionsTable } from "@/components/financial/transactions-table"
+import { NewBankAccountDialog } from "@/components/financial/new-bank-account-dialog"
+import { BankAccountsList } from "@/components/financial/bank-accounts-list"
+import { DateRangeFilter, type DateRangeValue } from "@/components/financial/date-range-filter"
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+
+function getDateRange(
+  period: DateRangeValue,
+  month?: string,
+  year?: string,
+): { startDate: Date; endDate: Date } | undefined {
+  const now = new Date()
+  switch (period) {
+    case "last-30-days":
+      return {
+        startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+        endDate: now,
+      }
+    case "last-90-days":
+      return {
+        startDate: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
+        endDate: now,
+      }
+    case "last-year":
+      return {
+        startDate: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
+        endDate: now,
+      }
+    case "specific-month": {
+      // month = "YYYY-MM"
+      const [y, m] = (month ?? "").split("-").map(Number)
+      if (!y || !m) return undefined
+      return {
+        startDate: new Date(y, m - 1, 1),
+        endDate: new Date(y, m, 0, 23, 59, 59),
+      }
+    }
+    case "specific-year": {
+      const y = Number(year)
+      if (!y) return undefined
+      return {
+        startDate: new Date(y, 0, 1),
+        endDate: new Date(y, 11, 31, 23, 59, 59),
+      }
+    }
+    case "all":
+      return undefined
+  }
+}
 
 const STATUS_COLORS: Record<string, string> = {
   PENDENTE: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
@@ -46,16 +94,27 @@ const STATUS_COLORS: Record<string, string> = {
   PARCIAL: "bg-blue-100 text-blue-800 hover:bg-blue-100",
 }
 
-export default async function FinanceiroPage() {
+interface FinanceiroPageProps {
+  searchParams: Promise<{ period?: string; month?: string; year?: string }>
+}
+
+export default async function FinanceiroPage({ searchParams }: FinanceiroPageProps) {
   const user = await requireAuth()
   const membership = await getUserActiveFarm(user.id)
   if (!membership) redirect("/login")
   const farmId = membership.farmId
 
-  const [bankAccounts, despesas, receitas] = await Promise.all([
+  const { period: periodParam, month: monthParam, year } = await searchParams
+  const period = (periodParam ?? "specific-month") as DateRangeValue
+  const now = new Date()
+  const month = monthParam ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  const dateFilter = getDateRange(period, month, year)
+
+  const [bankAccounts, allTransactions, despesas, receitas] = await Promise.all([
     getBankAccounts(farmId),
-    getTransactions(farmId, { type: "DESPESA" }),
-    getTransactions(farmId, { type: "RECEITA" }),
+    getTransactions(farmId, dateFilter),
+    getTransactions(farmId, { type: "DESPESA", ...dateFilter }),
+    getTransactions(farmId, { type: "RECEITA", ...dateFilter }),
   ])
 
   const totalBalance = bankAccounts.reduce(
@@ -145,38 +204,39 @@ export default async function FinanceiroPage() {
         </TabsList>
 
         <TabsContent value="contas" className="space-y-4">
-          {bankAccounts.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10">
-                <Landmark className="h-10 w-10 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground text-center">
-                  Nenhuma conta bancária cadastrada.
-                </p>
-                <Button variant="outline" className="mt-4" asChild>
-                  <Link href="/financeiro/nova-conta">Adicionar Conta</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {bankAccounts.map((account) => (
-                <Card key={account.id}>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{account.name}</CardTitle>
-                    <CardDescription>{account.bankName ?? "—"}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {formatCurrency(Number(account.currentBalance ?? 0))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Saldo atual
+          <div className="flex gap-4">
+            {/* Sidebar - Contas Bancárias */}
+            <div className="w-72 shrink-0 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Contas Bancárias</h3>
+                <NewBankAccountDialog />
+              </div>
+              <BankAccountsList accounts={bankAccounts} />
+            </div>
+
+            {/* Tabela de Transações */}
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="flex items-center justify-end">
+                <DateRangeFilter period={period} month={month} year={year} />
+              </div>
+              {allTransactions.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-10">
+                    <Wallet className="h-10 w-10 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground text-center">
+                      Nenhuma transação cadastrada.
                     </p>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <TransactionsTable transactions={allTransactions} farmId={farmId} />
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          )}
+          </div>
         </TabsContent>
 
         <TabsContent value="a-pagar" className="space-y-4">

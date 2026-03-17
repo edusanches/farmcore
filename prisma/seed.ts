@@ -55,11 +55,12 @@ async function main() {
   // ============================================================
 
   const activityTypeData = [
-    { name: "Aplicacao", subtypes: ["Herbicida", "Inseticida", "Fungicida", "Fertilizante", "Corte de soqueira"], icon: "spray-can", color: "#22c55e" },
-    { name: "Fertilizacao", subtypes: ["Fertilizacao de Cobertura", "Fertilizacao de Plantio", "Calagem", "Gessagem"], icon: "flask-conical", color: "#3b82f6" },
-    { name: "Colheita", subtypes: ["Colheita Mecanizada", "Colheita Manual"], icon: "truck", color: "#f59e0b" },
     { name: "Preparo de Solo", subtypes: ["Aracao", "Gradagem", "Subsolagem", "Sulcacao"], icon: "tractor", color: "#8b5cf6" },
+    { name: "Tratamento de Semente", subtypes: ["Fungicida", "Inseticida", "Nematicida", "Inoculante"], icon: "flask-round", color: "#ec4899" },
     { name: "Plantio", subtypes: ["Plantio Mecanizado", "Plantio Manual"], icon: "sprout", color: "#10b981" },
+    { name: "Fertilizacao", subtypes: ["Fertilizacao de Cobertura", "Fertilizacao de Plantio", "Calagem", "Gessagem"], icon: "flask-conical", color: "#3b82f6" },
+    { name: "Aplicacao", subtypes: ["Herbicida", "Inseticida", "Fungicida", "Fertilizante", "Corte de soqueira"], icon: "spray-can", color: "#22c55e" },
+    { name: "Colheita", subtypes: ["Colheita Mecanizada", "Colheita Manual"], icon: "truck", color: "#f59e0b" },
     { name: "Outro", subtypes: ["Catacao", "Carpa", "Manutencao"], icon: "more-horizontal", color: "#6b7280" },
   ]
 

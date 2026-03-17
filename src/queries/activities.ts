@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma"
-import type { ActivityStatus } from "@/generated/prisma/client"
+import type { ActivityStatus, ActivityKind } from "@/generated/prisma/client"
 
 export async function getActivities(
   farmId: string,
   filters?: {
     status?: ActivityStatus
+    kind?: ActivityKind
     cropId?: string
     activityTypeId?: string
   }
@@ -13,21 +14,41 @@ export async function getActivities(
     where: {
       farmId,
       ...(filters?.status && { status: filters.status }),
+      ...(filters?.kind && { kind: filters.kind }),
       ...(filters?.cropId && { cropId: filters.cropId }),
       ...(filters?.activityTypeId && { activityTypeId: filters.activityTypeId }),
     },
     include: {
-      activityType: { select: { id: true, name: true, color: true, icon: true } },
+      activityType: { select: { id: true, name: true, color: true, icon: true, subtypes: true } },
       crop: { select: { id: true, name: true } },
       activityAreas: {
         include: { area: { select: { id: true, name: true, sizeHa: true } } },
       },
       inputUsages: {
-        include: { input: { select: { id: true, name: true, unit: true } } },
+        include: { input: { select: { id: true, name: true, unit: true, category: true } } },
       },
+      plannedActivity: {
+        select: { id: true, code: true, kind: true },
+      },
+      realizations: {
+        select: { id: true, code: true, status: true, startDate: true, totalHa: true },
+      },
+      stock: { select: { id: true, name: true } },
     },
     orderBy: { startDate: "desc" },
   })
+}
+
+export async function getCropActivities(
+  farmId: string,
+  cropId: string,
+  filters?: {
+    status?: ActivityStatus
+    kind?: ActivityKind
+    activityTypeId?: string
+  }
+) {
+  return getActivities(farmId, { ...filters, cropId })
 }
 
 export async function getActivityById(farmId: string, activityId: string) {
@@ -38,6 +59,19 @@ export async function getActivityById(farmId: string, activityId: string) {
       crop: true,
       activityAreas: { include: { area: true } },
       inputUsages: { include: { input: true } },
+      plannedActivity: {
+        include: {
+          activityAreas: { include: { area: { select: { id: true, name: true } } } },
+          inputUsages: { include: { input: { select: { id: true, name: true, unit: true } } } },
+        },
+      },
+      realizations: {
+        include: {
+          activityAreas: { include: { area: { select: { id: true, name: true } } } },
+        },
+        orderBy: { startDate: "desc" },
+      },
+      stock: true,
       logs: {
         include: { user: { select: { name: true } } },
         orderBy: { createdAt: "desc" },

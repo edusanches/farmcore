@@ -10,6 +10,7 @@ import {
   CalendarDays,
   MapPin,
   Search,
+  Upload,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -110,12 +111,20 @@ export default async function AnaliseSoloPage() {
             Acompanhe a fertilidade do solo e tome decisões baseadas em dados
           </p>
         </div>
-        <Button asChild>
-          <Link href="/analise-solo/nova">
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Análise
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/analise-solo/importar">
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/analise-solo/nova">
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Análise
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

@@ -29,11 +29,16 @@ export const areaSchema = z.object({
 
 export const cropSchema = z.object({
   name: z.string().min(1, "Nome e obrigatorio"),
+  culture: z.string().min(1, "Cultura e obrigatoria"),
   plantingType: z.enum(["CANA_PLANTA", "SOQUEIRA", "OUTRO"]),
   variety: z.string().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   status: z.enum(["PLANEJADA", "EM_ANDAMENTO", "FINALIZADA"]).default("PLANEJADA"),
+  measurementUnit: z.string().optional(),
+  defaultInputStockId: z.string().optional(),
+  grossWeightDiscounts: z.array(z.string()).optional(),
+  netWeightDiscounts: z.array(z.string()).optional(),
   notes: z.string().optional(),
   areaIds: z.array(z.string()).min(1, "Selecione pelo menos uma area"),
 })
@@ -45,7 +50,10 @@ export const activitySchema = z.object({
   team: z.string().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date().optional(),
-  status: z.enum(["A_FAZER", "EM_PROGRESSO", "CONCLUIDO"]).default("A_FAZER"),
+  status: z.enum(["A_FAZER", "EM_PROGRESSO", "REVISAR", "CONCLUIDO"]).default("A_FAZER"),
+  kind: z.enum(["PLANEJADO", "REALIZADO"]).default("REALIZADO"),
+  plannedActivityId: z.string().optional(),
+  stockId: z.string().optional(),
   notes: z.string().optional(),
   areaIds: z.array(z.string()).min(1, "Selecione pelo menos uma area"),
   inputUsages: z.array(z.object({
@@ -104,6 +112,7 @@ export const bankAccountSchema = z.object({
   agency: z.string().optional(),
   accountNumber: z.string().optional(),
   initialBalance: z.coerce.number().default(0),
+  initialBalanceDate: z.coerce.date().default(() => new Date()),
 })
 
 export const transactionSchema = z.object({
@@ -124,7 +133,9 @@ export const transactionSchema = z.object({
 export const supplierSchema = z.object({
   name: z.string().min(1, "Nome e obrigatorio"),
   document: z.string().optional(),
+  types: z.array(z.enum(["PRODUTOS", "SERVICOS", "OUTRO"])).min(1, "Selecione pelo menos um tipo").default(["OUTRO"]),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
   email: z.string().email("Email invalido").optional().or(z.literal("")),
   address: z.string().optional(),
   notes: z.string().optional(),
@@ -147,6 +158,24 @@ export const purchaseSchema = z.object({
     unit: z.enum(["KG", "L", "T", "UNIDADE", "SACO", "ML", "G"]),
     unitPrice: z.coerce.number().positive(),
   })).min(1, "Adicione pelo menos um item"),
+})
+
+export const certificateUploadSchema = z.object({
+  password: z.string().min(1, "Senha do certificado e obrigatoria"),
+})
+
+export const approveNfeSchema = z.object({
+  nfeImportId: z.string().min(1),
+  supplierId: z.string().optional(),
+  categoryId: z.string().optional(),
+  bankAccountId: z.string().optional(),
+  dueDate: z.coerce.date().optional(),
+  notes: z.string().optional(),
+})
+
+export const rejectNfeSchema = z.object({
+  nfeImportId: z.string().min(1),
+  rejectionReason: z.string().optional(),
 })
 
 export const harvestSchema = z.object({

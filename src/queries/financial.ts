@@ -7,7 +7,7 @@ export async function getBankAccounts(farmId: string) {
     include: {
       transactions: {
         where: { status: { in: ["PAGO", "RECEBIDO"] } },
-        select: { amount: true, type: true },
+        select: { amount: true, type: true, paymentDate: true },
       },
     },
     orderBy: { name: "asc" },
@@ -15,6 +15,8 @@ export async function getBankAccounts(farmId: string) {
 
   return accounts.map((account) => {
     const balance = account.transactions.reduce((sum, t) => {
+      const txDate = t.paymentDate ?? new Date(0)
+      if (txDate < account.initialBalanceDate) return sum
       return sum + (t.type === "RECEITA" ? t.amount : -t.amount)
     }, account.initialBalance)
 
@@ -56,6 +58,21 @@ export async function getTransactions(
       },
     },
     orderBy: { dueDate: "desc" },
+  })
+}
+
+export async function getTransactionById(farmId: string, transactionId: string) {
+  return prisma.transaction.findFirst({
+    where: { id: transactionId, farmId },
+    include: {
+      category: { select: { id: true, name: true, color: true } },
+      bankAccount: { select: { id: true, name: true } },
+      supplier: { select: { id: true, name: true } },
+      installments: {
+        orderBy: { installmentNumber: "asc" },
+        select: { id: true, installmentNumber: true, amount: true, status: true, dueDate: true },
+      },
+    },
   })
 }
 

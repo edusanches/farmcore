@@ -47,6 +47,95 @@ export async function getInputById(farmId: string, inputId: string) {
   return { ...input, currentStock }
 }
 
+export async function getInputsByCrop(farmId: string, cropId: string) {
+  const usages = await prisma.inputUsage.findMany({
+    where: {
+      activity: { farmId, cropId },
+    },
+    include: {
+      input: {
+        include: {
+          inventoryEntries: { select: { quantity: true } },
+        },
+      },
+    },
+  })
+
+  // Deduplicate inputs and aggregate usage quantities
+  const inputMap = new Map<string, {
+    id: string
+    name: string
+    category: string
+    unit: string
+    totalUsed: number
+    currentStock: number
+  }>()
+
+  for (const usage of usages) {
+    const existing = inputMap.get(usage.input.id)
+    if (existing) {
+      existing.totalUsed += usage.quantity
+    } else {
+      inputMap.set(usage.input.id, {
+        id: usage.input.id,
+        name: usage.input.name,
+        category: usage.input.category,
+        unit: usage.input.unit,
+        totalUsed: usage.quantity,
+        currentStock: usage.input.inventoryEntries.reduce((sum, e) => sum + e.quantity, 0),
+      })
+    }
+  }
+
+  return Array.from(inputMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function getInputsByCropAndArea(farmId: string, cropId: string, areaId: string) {
+  const usages = await prisma.inputUsage.findMany({
+    where: {
+      activity: {
+        farmId,
+        cropId,
+        activityAreas: { some: { areaId } },
+      },
+    },
+    include: {
+      input: {
+        include: {
+          inventoryEntries: { select: { quantity: true } },
+        },
+      },
+    },
+  })
+
+  const inputMap = new Map<string, {
+    id: string
+    name: string
+    category: string
+    unit: string
+    totalUsed: number
+    currentStock: number
+  }>()
+
+  for (const usage of usages) {
+    const existing = inputMap.get(usage.input.id)
+    if (existing) {
+      existing.totalUsed += usage.quantity
+    } else {
+      inputMap.set(usage.input.id, {
+        id: usage.input.id,
+        name: usage.input.name,
+        category: usage.input.category,
+        unit: usage.input.unit,
+        totalUsed: usage.quantity,
+        currentStock: usage.input.inventoryEntries.reduce((sum, e) => sum + e.quantity, 0),
+      })
+    }
+  }
+
+  return Array.from(inputMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export async function getInputStock(farmId: string, inputId: string) {
   const result = await prisma.inventoryEntry.aggregate({
     where: { farmId, inputId },
